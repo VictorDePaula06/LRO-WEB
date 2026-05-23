@@ -224,7 +224,7 @@ export default function ToolsPage() {
               <tbody>
                 {tools.map((tool) => (
                   <tr key={tool.id}>
-                    <td>
+                    <td data-label="Foto">
                       <div style={{
                         width: "48px",
                         height: "48px",
@@ -243,11 +243,11 @@ export default function ToolsPage() {
                         )}
                       </div>
                     </td>
-                    <td style={{ fontWeight: 600 }}>{tool.name}</td>
-                    <td>{tool.brand || "—"}</td>
-                    <td style={{ fontFamily: "monospace" }}>{tool.serialNumber || "—"}</td>
-                    <td>{getStatusBadge(tool.status)}</td>
-                    <td style={{ fontStyle: tool.currentEmployeeName ? "normal" : "italic", color: tool.currentEmployeeName ? "var(--text-primary)" : "var(--text-muted)" }}>
+                    <td data-label="Ferramenta" style={{ fontWeight: 600 }}>{tool.name}</td>
+                    <td data-label="Marca">{tool.brand || "—"}</td>
+                    <td data-label="Nº Série" style={{ fontFamily: "monospace" }}>{tool.serialNumber || "—"}</td>
+                    <td data-label="Status">{getStatusBadge(tool.status)}</td>
+                    <td data-label="Responsável" style={{ fontStyle: tool.currentEmployeeName ? "normal" : "italic", color: tool.currentEmployeeName ? "var(--text-primary)" : "var(--text-muted)" }}>
                       {tool.currentEmployeeName || "Na Base"}
                     </td>
                     <td style={{ textAlign: "right" }}>

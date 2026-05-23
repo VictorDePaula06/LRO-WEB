@@ -234,7 +234,7 @@ export default function EmployeesPage() {
                   const toolsCount = getActiveToolsCount(emp.id);
                   return (
                     <tr key={emp.id}>
-                      <td>
+                      <td data-label="Perfil">
                         <div style={{
                           width: "44px",
                           height: "44px",
@@ -253,9 +253,9 @@ export default function EmployeesPage() {
                           )}
                         </div>
                       </td>
-                      <td style={{ fontWeight: 600 }}>{emp.name}</td>
-                      <td>{emp.role}</td>
-                      <td>
+                      <td data-label="Nome" style={{ fontWeight: 600 }}>{emp.name}</td>
+                      <td data-label="Cargo">{emp.role}</td>
+                      <td data-label="Contato">
                         {emp.phone && emp.phone !== "Sem Telefone" ? (
                           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                             <Phone size={13} style={{ color: "var(--text-muted)" }} />
@@ -265,7 +265,7 @@ export default function EmployeesPage() {
                           <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Sem telefone</span>
                         )}
                       </td>
-                      <td>
+                      <td data-label="PIN">
                         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                           <Key size={13} style={{ color: "var(--accent-color)" }} />
                           <span style={{ fontFamily: "monospace", letterSpacing: "1px", fontWeight: 700 }}>
@@ -273,7 +273,7 @@ export default function EmployeesPage() {
                           </span>
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Ferramentas">
                         {toolsCount > 0 ? (
                           <span className="badge badge-warning" style={{ fontWeight: 700 }}>
                             {toolsCount} {toolsCount === 1 ? "ferramenta" : "ferramentas"}

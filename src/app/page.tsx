@@ -290,10 +290,10 @@ export default function Dashboard() {
               <tbody>
                 {pendingReturns.map((loan) => (
                   <tr key={loan.id}>
-                    <td style={{ fontWeight: 700 }}>{loan.toolName}</td>
-                    <td>{loan.employeeName}</td>
-                    <td>{loan.returnRequestDate ? formatShortDate(loan.returnRequestDate) : "—"}</td>
-                    <td>
+                    <td data-label="Ferramenta" style={{ fontWeight: 700 }}>{loan.toolName}</td>
+                    <td data-label="Colaborador">{loan.employeeName}</td>
+                    <td data-label="Data Devolução">{loan.returnRequestDate ? formatShortDate(loan.returnRequestDate) : "—"}</td>
+                    <td data-label="Comprovante">
                       {loan.returnProofImage ? (
                         <div 
                           onClick={() => {
@@ -377,10 +377,10 @@ export default function Dashboard() {
                     const isOverdue = new Date(loan.dueDate) < new Date();
                     return (
                       <tr key={loan.id}>
-                        <td style={{ fontWeight: 600 }}>{loan.toolName}</td>
-                        <td>{loan.employeeName}</td>
-                        <td>{formatShortDate(loan.loanDate)}</td>
-                        <td style={{ color: isOverdue ? "var(--danger-color)" : "inherit", fontWeight: isOverdue ? "700" : "inherit" }}>
+                        <td data-label="Ferramenta" style={{ fontWeight: 600 }}>{loan.toolName}</td>
+                        <td data-label="Responsável">{loan.employeeName}</td>
+                        <td data-label="Data Saída">{formatShortDate(loan.loanDate)}</td>
+                        <td data-label="Previsão" style={{ color: isOverdue ? "var(--danger-color)" : "inherit", fontWeight: isOverdue ? "700" : "inherit" }}>
                           {new Date(loan.dueDate).toLocaleDateString("pt-BR")}
                           {isOverdue && " (Atrasado)"}
                         </td>
