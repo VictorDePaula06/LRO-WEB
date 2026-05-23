@@ -1,21 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { LayoutDashboard, Wrench, Users, Briefcase, LogOut } from "lucide-react";
-import CustomDialog from "./CustomDialog";
 
-export default function Sidebar() {
+interface SidebarProps {
+  onLogout: () => void;
+}
+
+export default function Sidebar({ onLogout }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  const handleLogoutConfirm = () => {
-    localStorage.clear();
-    setDialogOpen(false);
-    router.push("/login");
-  };
 
   return (
     <aside className="sidebar">
@@ -68,7 +62,7 @@ export default function Sidebar() {
 
       <div className="sidebar-footer" style={{ display: "flex", flexDirection: "column", gap: "1rem", width: "100%", marginTop: "auto" }}>
         <button 
-          onClick={() => setDialogOpen(true)}
+          onClick={onLogout}
           className="nav-link nav-link-logout"
           style={{
             display: "flex",
@@ -95,16 +89,6 @@ export default function Sidebar() {
           <p>© 2026 LRO Demolições</p>
         </div>
       </div>
-
-      <CustomDialog
-        isOpen={dialogOpen}
-        title="Sair da Conta"
-        message="Deseja realmente encerrar a sua sessão administrativa no LRO?"
-        type="confirm"
-        confirmText="Sair"
-        onConfirm={handleLogoutConfirm}
-        onCancel={() => setDialogOpen(false)}
-      />
     </aside>
   );
 }

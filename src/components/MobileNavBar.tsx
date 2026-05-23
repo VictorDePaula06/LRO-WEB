@@ -1,21 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { LayoutDashboard, Wrench, Users, LogOut, Briefcase } from "lucide-react";
-import CustomDialog from "./CustomDialog";
 
-export default function MobileNavBar() {
+interface MobileNavBarProps {
+  onLogout: () => void;
+}
+
+export default function MobileNavBar({ onLogout }: MobileNavBarProps) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  const handleLogoutConfirm = () => {
-    localStorage.clear();
-    setDialogOpen(false);
-    router.push("/login");
-  };
 
   return (
     <nav className="mobile-nav-bar">
@@ -52,23 +46,13 @@ export default function MobileNavBar() {
       </Link>
       
       <button 
-        onClick={() => setDialogOpen(true)}
+        onClick={onLogout}
         className="mobile-nav-item logout-btn"
         style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}
       >
         <LogOut size={20} style={{ color: "var(--danger-color)" }} />
         <span style={{ color: "var(--danger-color)" }}>Sair</span>
       </button>
-
-      <CustomDialog
-        isOpen={dialogOpen}
-        title="Sair da Gerência"
-        message="Deseja realmente encerrar a sua sessão administrativa no LRO?"
-        type="confirm"
-        confirmText="Sair"
-        onConfirm={handleLogoutConfirm}
-        onCancel={() => setDialogOpen(false)}
-      />
     </nav>
   );
 }

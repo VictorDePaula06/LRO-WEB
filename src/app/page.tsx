@@ -404,22 +404,26 @@ export default function Dashboard() {
                 {pendingReturns.map((loan) => (
                   <tr key={loan.id}>
                     <td data-label="Ferramenta" style={{ fontWeight: 700 }}>
-                      <div>{loan.toolName}</div>
-                      <div style={{ marginTop: "0.25rem" }}>
-                        <span className="badge badge-success" style={{ backgroundColor: "rgba(16, 185, 129, 0.08)", border: "1px solid var(--accent-color)", padding: "0.15rem 0.5rem", fontSize: "0.7rem", textTransform: "none", fontWeight: "700" }}>
-                          📍 Devolvido para Base (Vindo de: {loan.obraName || "Base"})
-                        </span>
+                      <div className="cell-flex-col">
+                        <div>{loan.toolName}</div>
+                        <div style={{ marginTop: "0.25rem" }}>
+                          <span className="badge badge-success" style={{ backgroundColor: "rgba(16, 185, 129, 0.08)", border: "1px solid var(--accent-color)", padding: "0.15rem 0.5rem", fontSize: "0.7rem", textTransform: "none", fontWeight: "700" }}>
+                            📍 Devolvido para Base (Vindo de: {loan.obraName || "Base"})
+                          </span>
+                        </div>
                       </div>
                     </td>
                     <td data-label="Colaborador">{loan.employeeName}</td>
                     <td data-label="Data Devolução">
-                      <div>{loan.returnRequestDate ? formatShortDate(loan.returnRequestDate) : "—"}</div>
-                      <div style={{ marginTop: "0.25rem" }}>
-                        {loan.returnCondition === "repair" ? (
-                          <span className="badge badge-danger" style={{ fontWeight: 700, padding: "0.2rem 0.5rem", fontSize: "0.7rem" }}>🔴 Precisa Reparo</span>
-                        ) : (
-                          <span className="badge badge-success" style={{ fontWeight: 700, backgroundColor: "rgba(16, 185, 129, 0.12)", padding: "0.2rem 0.5rem", fontSize: "0.7rem" }}>🟢 Funcionando</span>
-                        )}
+                      <div className="cell-flex-col">
+                        <div>{loan.returnRequestDate ? formatShortDate(loan.returnRequestDate) : "—"}</div>
+                        <div style={{ marginTop: "0.25rem" }}>
+                          {loan.returnCondition === "repair" ? (
+                            <span className="badge badge-danger" style={{ fontWeight: 700, padding: "0.2rem 0.5rem", fontSize: "0.7rem" }}>🔴 Precisa Reparo</span>
+                          ) : (
+                            <span className="badge badge-success" style={{ fontWeight: 700, backgroundColor: "rgba(16, 185, 129, 0.12)", padding: "0.2rem 0.5rem", fontSize: "0.7rem" }}>🟢 Funcionando</span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td data-label="Comprovante">
@@ -507,11 +511,13 @@ export default function Dashboard() {
                     return (
                       <tr key={loan.id}>
                         <td data-label="Ferramenta" style={{ fontWeight: 600 }}>
-                          <div>{loan.toolName}</div>
-                          <div style={{ marginTop: "0.25rem" }}>
-                            <span className="badge badge-success" style={{ backgroundColor: "rgba(16, 185, 129, 0.08)", border: "1px solid var(--accent-color)", padding: "0.15rem 0.5rem", fontSize: "0.7rem", textTransform: "none", fontWeight: "700" }}>
-                              📍 {loan.obraName || "Base Central (LRO)"}
-                            </span>
+                          <div className="cell-flex-col">
+                            <div>{loan.toolName}</div>
+                            <div style={{ marginTop: "0.25rem" }}>
+                              <span className="badge badge-success" style={{ backgroundColor: "rgba(16, 185, 129, 0.08)", border: "1px solid var(--accent-color)", padding: "0.15rem 0.5rem", fontSize: "0.7rem", textTransform: "none", fontWeight: "700" }}>
+                                📍 {loan.obraName || "Base Central (LRO)"}
+                              </span>
+                            </div>
                           </div>
                         </td>
                         <td data-label="Responsável">

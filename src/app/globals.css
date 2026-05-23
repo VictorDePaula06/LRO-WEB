@@ -336,6 +336,13 @@ html, body {
   background-color: rgba(255, 255, 255, 0.015);
 }
 
+.cell-flex-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+
 /* Badges */
 .badge {
   display: inline-flex;
@@ -468,6 +475,69 @@ html, body {
     margin-left: 0;
     padding: 1.5rem 1.5rem 5.5rem 1.5rem;
   }
+
+  /* Modern Premium Page Header for Mobile */
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.45) 0%, rgba(15, 23, 42, 0.25) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem;
+    gap: 1.25rem;
+    margin-bottom: 1.75rem;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  
+  .page-title h1 {
+    font-size: 1.45rem !important;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800;
+  }
+  
+  .page-title p {
+    font-size: 0.825rem;
+    margin-top: 0.35rem;
+    line-height: 1.4;
+    color: var(--text-secondary);
+  }
+  
+  /* Flex wrap wrapper for titles that have network badge */
+  .page-title > div[style*="display: flex"] {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+  }
+  
+  .network-badge {
+    padding: 0.25rem 0.6rem !important;
+    font-size: 0.7rem !important;
+    border-radius: 50px;
+  }
+
+  /* Make header action button full width and gorgeous */
+  .page-header .btn,
+  .page-header button.btn,
+  .page-header div[style*="display: flex"] button.btn,
+  .page-header div[style*="display: flex"] .btn {
+    width: 100% !important;
+    padding: 0.8rem 1.25rem;
+    font-size: 0.925rem;
+    border-radius: 10px;
+    justify-content: center;
+    box-shadow: 0 4px 14px var(--accent-glow);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .page-header div[style*="display: flex"] {
+    width: 100% !important;
+  }
 }
 
 /* Animations */
@@ -508,34 +578,65 @@ html, body {
   
   .lro-table td {
     border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
-    padding: 0.75rem 0;
+    padding: 0.85rem 0;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    text-align: right;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    gap: 0.35rem;
+    width: 100%;
   }
   
   .lro-table td:last-child {
     border-bottom: none;
-    margin-top: 0.5rem;
+    margin-top: 0.75rem;
     padding-bottom: 0;
-    justify-content: flex-end;
+    align-items: stretch;
+  }
+  
+  .lro-table td:last-child > div {
+    display: flex !important;
+    width: 100% !important;
+    gap: 0.5rem !important;
+  }
+  
+  .lro-table td:last-child .btn {
+    flex: 1 !important;
+    justify-content: center !important;
+    padding: 0.65rem 1rem !important;
+    font-size: 0.85rem !important;
+    border-radius: 8px !important;
   }
   
   .lro-table td::before {
     content: attr(data-label);
-    font-weight: 700;
+    font-weight: 800;
     color: var(--text-muted);
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    float: left;
+    float: none;
     text-align: left;
-    padding-right: 1rem;
+    margin-bottom: 0.1rem;
   }
   
   .lro-table td:last-child::before {
     display: none; /* No label for action buttons */
+  }
+
+  .cell-flex-col {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    width: 100%;
+    gap: 0.25rem;
+  }
+
+  .section-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
   }
 }
 

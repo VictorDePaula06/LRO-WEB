@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import MobileNavBar from "./MobileNavBar";
+import CustomDialog from "./CustomDialog";
 
 interface LayoutWrapperProps {
   children: React.ReactNode;
@@ -11,6 +12,8 @@ interface LayoutWrapperProps {
 
 export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
@@ -19,6 +22,12 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
         .catch((err) => console.error("Falha ao registrar PWA Service Worker:", err));
     }
   }, []);
+
+  const handleLogoutConfirm = () => {
+    localStorage.clear();
+    setLogoutDialogOpen(false);
+    router.push("/login");
+  };
   
   // Hides the sidebar and overrides layout margins on specific authentication or worker pages
   const isAuthOrColabPage = pathname === "/login" || pathname === "/colab";
@@ -35,11 +44,21 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
 
   return (
     <div className="app-container">
-      <Sidebar />
+      <Sidebar onLogout={() => setLogoutDialogOpen(true)} />
       <main className="main-content">
         {children}
       </main>
-      <MobileNavBar />
+      <MobileNavBar onLogout={() => setLogoutDialogOpen(true)} />
+
+      <CustomDialog
+        isOpen={logoutDialogOpen}
+        title="Sair da Gerência"
+        message="Deseja realmente encerrar a sua sessão administrativa no LRO?"
+        type="confirm"
+        confirmText="Sair"
+        onConfirm={handleLogoutConfirm}
+        onCancel={() => setLogoutDialogOpen(false)}
+      />
     </div>
   );
 }
