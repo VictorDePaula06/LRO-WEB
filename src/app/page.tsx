@@ -9,9 +9,10 @@ import {
   createLoan, 
   approveReturn, 
   rejectReturn,
-  returnLoan 
+  returnLoan,
+  getObras
 } from "@/services/dataService";
-import { Tool, Employee, Loan } from "@/types";
+import { Tool, Employee, Loan, Obra } from "@/types";
 import { 
   Wrench, 
   Users, 
@@ -26,8 +27,10 @@ import {
   ThumbsUp,
   ThumbsDown,
   ExternalLink,
-  Calendar
+  Calendar,
+  MessageCircle
 } from "lucide-react";
+import CustomDialog from "@/components/CustomDialog";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -36,12 +39,74 @@ export default function Dashboard() {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Custom Dialog State
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogTitle, setDialogTitle] = useState("");
+  const [dialogMessage, setDialogMessage] = useState("");
+  const [dialogType, setDialogType] = useState<"info" | "warning" | "danger" | "confirm">("info");
+  const [dialogConfirmText, setDialogConfirmText] = useState("OK");
+  const [dialogOnConfirm, setDialogOnConfirm] = useState<() => void>(() => {});
+
+  const triggerDialog = (
+    title: string,
+    message: string,
+    type: "info" | "warning" | "danger" | "confirm",
+    onConfirm: () => void,
+    confirmText = "OK"
+  ) => {
+    setDialogTitle(title);
+    setDialogMessage(message);
+    setDialogType(type);
+    setDialogConfirmText(confirmText);
+    setDialogOnConfirm(() => () => {
+      onConfirm();
+      setDialogOpen(false);
+    });
+    setDialogOpen(true);
+  };
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedToolId, setSelectedToolId] = useState("");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
+  const [employeeDropdownOpen, setEmployeeDropdownOpen] = useState(false);
+  
+  // Obra & Offline Connection State
+  const [obraName, setObraName] = useState("Obra Shopping Bourbon");
+  const [obraDropdownOpen, setObraDropdownOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [obras, setObras] = useState<Obra[]>([]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsOnline(navigator.onLine);
+      const handleOnline = () => setIsOnline(true);
+      const handleOffline = () => setIsOnline(false);
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
+      return () => {
+        window.removeEventListener("online", handleOnline);
+        window.removeEventListener("offline", handleOffline);
+      };
+    }
+  }, []);
+
+  const getWhatsAppLink = (loan: Loan) => {
+    const emp = employees.find(e => e.id === loan.employeeId);
+    if (!emp || !emp.phone || emp.phone === "Sem Telefone") return null;
+    
+    const formattedPhone = "55" + emp.phone.replace(/\D/g, "");
+    const loanDateForm = new Date(loan.loanDate).toLocaleDateString("pt-BR");
+    const dueDateForm = new Date(loan.dueDate).toLocaleDateString("pt-BR");
+    
+    const text = encodeURIComponent(
+      `*LRO Demolições - Carga de Ferramenta*\n\nOlá, *${emp.name}*!\n\nConfirmamos que você retirou o equipamento:\n🛠️ *${loan.toolName}*\n📍 *Canteiro:* ${loan.obraName || "Base Central (LRO)"}\n\n🗓️ *Data Saída:* ${loanDateForm}\n📅 *Previsão Devolução:* ${dueDateForm}\n\nPor favor, zele pelo equipamento e lembre-se de comprovar a devolução tirando foto da máquina na base pelo Portal do Colaborador.\n\nBom trabalho!`
+    );
+    return `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${text}`;
+  };
 
   // Proof Image Preview Modal State
   const [selectedProofImage, setSelectedProofImage] = useState<string | null>(null);
@@ -59,14 +124,23 @@ export default function Dashboard() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [fetchedTools, fetchedEmployees, fetchedLoans] = await Promise.all([
+      const [fetchedTools, fetchedEmployees, fetchedLoans, fetchedObras] = await Promise.all([
         getTools(),
         getEmployees(),
-        getLoans()
+        getLoans(),
+        getObras()
       ]);
       setTools(fetchedTools);
       setEmployees(fetchedEmployees);
       setLoans(fetchedLoans);
+      setObras(fetchedObras);
+      
+      const activeObras = fetchedObras.filter(o => o.status === "active");
+      if (activeObras.length > 0) {
+        setObraName(activeObras[0].name);
+      } else {
+        setObraName("Base Central (LRO)");
+      }
     } catch (err) {
       console.error("Erro ao buscar dados:", err);
     } finally {
@@ -108,7 +182,7 @@ export default function Dashboard() {
 
     try {
       setErrorMsg("");
-      await createLoan(selectedToolId, selectedEmployeeId, dueDate);
+      await createLoan(selectedToolId, selectedEmployeeId, dueDate, obraName);
       
       // Reset & Refresh
       setSelectedToolId("");
@@ -123,15 +197,22 @@ export default function Dashboard() {
 
   // Instant Check-in from Admin (bypasses collaborator request flow)
   const handleReturnToolAdmin = async (loanId: string) => {
-    if (confirm("Confirmar a devolução direta desta ferramenta?")) {
-      try {
-        await returnLoan(loanId);
-        await fetchData();
-      } catch (err) {
-        console.error("Erro ao devolver ferramenta:", err);
-        alert("Erro ao realizar a devolução.");
-      }
-    }
+    triggerDialog(
+      "Confirmar Retorno",
+      "Confirmar a devolução direta desta ferramenta para a base? O status será alterado para Disponível.",
+      "confirm",
+      async () => {
+        try {
+          await returnLoan(loanId);
+          await fetchData();
+          triggerDialog("Sucesso", "Devolução registrada com sucesso!", "info", () => {});
+        } catch (err) {
+          console.error("Erro ao devolver ferramenta:", err);
+          triggerDialog("Erro", "Erro ao realizar a devolução direta.", "danger", () => {});
+        }
+      },
+      "Confirmar"
+    );
   };
 
   // Approve Collaborator Return request
@@ -139,24 +220,31 @@ export default function Dashboard() {
     try {
       await approveReturn(loanId);
       await fetchData();
+      triggerDialog("Sucesso", "Devolução aprovada com sucesso!", "info", () => {});
     } catch (err) {
       console.error("Erro ao aprovar devolução:", err);
-      alert("Erro ao aprovar devolução.");
+      triggerDialog("Erro", "Erro ao aprovar devolução.", "danger", () => {});
     }
   };
 
   // Reject Collaborator Return request
   const handleRejectReturn = async (loanId: string) => {
-    const motive = confirm("Deseja rejeitar esta devolução? A ferramenta voltará ao estado de 'Emprestada' com o funcionário.");
-    if (motive) {
-      try {
-        await rejectReturn(loanId);
-        await fetchData();
-      } catch (err) {
-        console.error("Erro ao rejeitar devolução:", err);
-        alert("Erro ao rejeitar devolução.");
-      }
-    }
+    triggerDialog(
+      "Rejeitar Devolução?",
+      "Deseja rejeitar esta devolução? A ferramenta voltará ao estado de 'Emprestada' sob a responsabilidade do funcionário.",
+      "confirm",
+      async () => {
+        try {
+          await rejectReturn(loanId);
+          await fetchData();
+          triggerDialog("Devolução Rejeitada", "A solicitação foi rejeitada e a ferramenta retornou ao canteiro com o colaborador.", "info", () => {});
+        } catch (err) {
+          console.error("Erro ao rejeitar devolução:", err);
+          triggerDialog("Erro", "Erro ao rejeitar devolução.", "danger", () => {});
+        }
+      },
+      "Rejeitar"
+    );
   };
 
   const formatShortDate = (isoString: string) => {
@@ -186,15 +274,40 @@ export default function Dashboard() {
       {/* Page Header */}
       <header className="page-header">
         <div className="page-title">
-          <h1>Painel da Gerência</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+            <h1 style={{ margin: 0 }}>Painel da Gerência</h1>
+            <div className={`network-badge ${isOnline ? "online" : "offline"}`} style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "0.35rem 0.75rem",
+              borderRadius: "50px",
+              backgroundColor: isOnline ? "rgba(16, 185, 129, 0.1)" : "rgba(245, 158, 11, 0.1)",
+              border: isOnline ? "1px solid rgba(16, 185, 129, 0.25)" : "1px solid rgba(245, 158, 11, 0.25)",
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              color: isOnline ? "var(--success-color)" : "var(--warning-color)"
+            }}>
+              <span className="network-dot" style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                backgroundColor: isOnline ? "var(--success-color)" : "var(--warning-color)",
+                boxShadow: isOnline ? "0 0 8px var(--success-color)" : "0 0 8px var(--warning-color)",
+                animation: "pulseNetwork 1.5s infinite"
+              }} />
+              <span>{isOnline ? "Online (Nuvem)" : "Offline (Modo Obra)"}</span>
+            </div>
+          </div>
           <p>Controle centralizado, aprovações por foto e inventário LRO</p>
         </div>
         
         <div style={{ display: "flex", gap: "0.75rem" }}>
-          <button className="btn btn-secondary btn-danger" onClick={handleLogout}>
-            Sair
-          </button>
-          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+          <button className="btn btn-primary" onClick={() => {
+            const activeObras = obras.filter(o => o.status === "active");
+            setObraName(activeObras.length > 0 ? activeObras[0].name : "Base Central (LRO)");
+            setIsModalOpen(true);
+          }}>
             <PlusCircle size={18} />
             Nova Saída (Check-out)
           </button>
@@ -290,9 +403,25 @@ export default function Dashboard() {
               <tbody>
                 {pendingReturns.map((loan) => (
                   <tr key={loan.id}>
-                    <td data-label="Ferramenta" style={{ fontWeight: 700 }}>{loan.toolName}</td>
+                    <td data-label="Ferramenta" style={{ fontWeight: 700 }}>
+                      <div>{loan.toolName}</div>
+                      <div style={{ marginTop: "0.25rem" }}>
+                        <span className="badge badge-success" style={{ backgroundColor: "rgba(16, 185, 129, 0.08)", border: "1px solid var(--accent-color)", padding: "0.15rem 0.5rem", fontSize: "0.7rem", textTransform: "none", fontWeight: "700" }}>
+                          📍 Devolvido para Base (Vindo de: {loan.obraName || "Base"})
+                        </span>
+                      </div>
+                    </td>
                     <td data-label="Colaborador">{loan.employeeName}</td>
-                    <td data-label="Data Devolução">{loan.returnRequestDate ? formatShortDate(loan.returnRequestDate) : "—"}</td>
+                    <td data-label="Data Devolução">
+                      <div>{loan.returnRequestDate ? formatShortDate(loan.returnRequestDate) : "—"}</div>
+                      <div style={{ marginTop: "0.25rem" }}>
+                        {loan.returnCondition === "repair" ? (
+                          <span className="badge badge-danger" style={{ fontWeight: 700, padding: "0.2rem 0.5rem", fontSize: "0.7rem" }}>🔴 Precisa Reparo</span>
+                        ) : (
+                          <span className="badge badge-success" style={{ fontWeight: 700, backgroundColor: "rgba(16, 185, 129, 0.12)", padding: "0.2rem 0.5rem", fontSize: "0.7rem" }}>🟢 Funcionando</span>
+                        )}
+                      </div>
+                    </td>
                     <td data-label="Comprovante">
                       {loan.returnProofImage ? (
                         <div 
@@ -377,8 +506,43 @@ export default function Dashboard() {
                     const isOverdue = new Date(loan.dueDate) < new Date();
                     return (
                       <tr key={loan.id}>
-                        <td data-label="Ferramenta" style={{ fontWeight: 600 }}>{loan.toolName}</td>
-                        <td data-label="Responsável">{loan.employeeName}</td>
+                        <td data-label="Ferramenta" style={{ fontWeight: 600 }}>
+                          <div>{loan.toolName}</div>
+                          <div style={{ marginTop: "0.25rem" }}>
+                            <span className="badge badge-success" style={{ backgroundColor: "rgba(16, 185, 129, 0.08)", border: "1px solid var(--accent-color)", padding: "0.15rem 0.5rem", fontSize: "0.7rem", textTransform: "none", fontWeight: "700" }}>
+                              📍 {loan.obraName || "Base Central (LRO)"}
+                            </span>
+                          </div>
+                        </td>
+                        <td data-label="Responsável">
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <span>{loan.employeeName}</span>
+                            {(() => {
+                              const waLink = getWhatsAppLink(loan);
+                              if (!waLink) return null;
+                              return (
+                                <a 
+                                  href={waLink} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  title="Notificar Empréstimo por WhatsApp"
+                                  style={{ 
+                                    color: "#25d366", 
+                                    display: "inline-flex", 
+                                    alignItems: "center", 
+                                    justifyContent: "center", 
+                                    backgroundColor: "rgba(37, 211, 102, 0.12)", 
+                                    padding: "0.35rem", 
+                                    borderRadius: "50%",
+                                    transition: "transform 0.15s ease"
+                                  }}
+                                >
+                                  <MessageCircle size={13} />
+                                </a>
+                              );
+                            })()}
+                          </div>
+                        </td>
                         <td data-label="Data Saída">{formatShortDate(loan.loanDate)}</td>
                         <td data-label="Previsão" style={{ color: isOverdue ? "var(--danger-color)" : "inherit", fontWeight: isOverdue ? "700" : "inherit" }}>
                           {new Date(loan.dueDate).toLocaleDateString("pt-BR")}
@@ -440,13 +604,23 @@ export default function Dashboard() {
                     <p style={{ fontWeight: 600, color: "var(--text-primary)" }}>
                       {loan.toolName}
                     </p>
-                    <p style={{ color: "var(--text-secondary)" }}>
-                      {loan.status === "returned" 
-                        ? "Devolvido por " 
-                        : loan.status === "pending" 
-                        ? "Solicitou devolução " 
-                        : "Retirado por "} 
+                    <p style={{ color: "var(--text-secondary)", lineHeight: "1.4" }}>
+                      {loan.status === "returned" && (
+                        <>Retornado para <strong>Base Central</strong> por </>
+                      )}
+                      {loan.status === "pending" && (
+                        <>Solicitou devolução para <strong>Base</strong> por </>
+                      )}
+                      {loan.status === "active" && (
+                        <>Retirado por </>
+                      )}
                       <strong>{loan.employeeName}</strong>
+                      {loan.status === "active" && (
+                        <> para <strong>{loan.obraName || "Base"}</strong></>
+                      )}
+                      {(loan.status === "returned" || loan.status === "pending") && (
+                        <> (Vindo de: <strong>{loan.obraName || "Base"}</strong>)</>
+                      )}
                     </p>
                     <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                       {formatShortDate(loan.returnDate || loan.returnRequestDate || loan.loanDate)}
@@ -475,40 +649,329 @@ export default function Dashboard() {
                 </div>
               )}
 
-              <div className="form-group">
-                <label htmlFor="toolSelect">Selecione a Ferramenta Disponível</label>
-                <select 
-                  id="toolSelect"
-                  className="form-control"
-                  value={selectedToolId}
-                  onChange={(e) => setSelectedToolId(e.target.value)}
-                  required
-                >
-                  <option value="">-- Selecione uma ferramenta --</option>
-                  {availableToolsList.map(t => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} {t.brand ? `(${t.brand})` : ""} {t.serialNumber && t.serialNumber !== "N/A" ? `- SN: ${t.serialNumber}` : ""}
-                    </option>
-                  ))}
-                </select>
+              <div className="form-group" style={{ position: "relative" }}>
+                <label>Selecione a Ferramenta Disponível</label>
+                <div className="custom-dropdown-container">
+                  <button
+                    type="button"
+                    className="form-control custom-dropdown-trigger"
+                    onClick={() => {
+                      setToolDropdownOpen(!toolDropdownOpen);
+                      setEmployeeDropdownOpen(false);
+                    }}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      textAlign: "left",
+                      cursor: "pointer"
+                    }}
+                  >
+                    <span>
+                      {selectedToolId 
+                        ? availableToolsList.find(t => t.id === selectedToolId)
+                          ? (() => {
+                              const t = availableToolsList.find(t => t.id === selectedToolId)!;
+                              return `${t.name}${t.brand ? ` (${t.brand})` : ""}${t.serialNumber && t.serialNumber !== "N/A" ? ` - SN: ${t.serialNumber}` : ""}`;
+                            })()
+                          : "-- Selecione uma ferramenta --"
+                        : "-- Selecione uma ferramenta --"}
+                    </span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>▼</span>
+                  </button>
+                  
+                  {toolDropdownOpen && (
+                    <>
+                      <div 
+                        style={{
+                          position: "fixed",
+                          top: 0,
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          zIndex: 999
+                        }}
+                        onClick={() => setToolDropdownOpen(false)}
+                      />
+                      <div 
+                        className="custom-dropdown-options"
+                        style={{
+                          position: "absolute",
+                          top: "100%",
+                          left: 0,
+                          right: 0,
+                          backgroundColor: "var(--bg-tertiary)",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "8px",
+                          marginTop: "4px",
+                          maxHeight: "200px",
+                          overflowY: "auto",
+                          zIndex: 1000,
+                          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)"
+                        }}
+                      >
+                        <div
+                          className="custom-dropdown-option"
+                          onClick={() => {
+                            setSelectedToolId("");
+                            setToolDropdownOpen(false);
+                          }}
+                          style={{
+                            padding: "0.75rem 1rem",
+                            cursor: "pointer",
+                            color: "var(--text-muted)",
+                            borderBottom: "1px solid rgba(255,255,255,0.04)"
+                          }}
+                        >
+                          -- Selecione uma ferramenta --
+                        </div>
+                        
+                        {availableToolsList.length === 0 ? (
+                          <div style={{ padding: "0.75rem 1rem", color: "var(--text-muted)", fontSize: "0.85rem", fontStyle: "italic" }}>
+                            Nenhuma ferramenta disponível na base
+                          </div>
+                        ) : (
+                          availableToolsList.map(t => {
+                            const isSelected = t.id === selectedToolId;
+                            const displayText = `${t.name}${t.brand ? ` (${t.brand})` : ""}${t.serialNumber && t.serialNumber !== "N/A" ? ` - SN: ${t.serialNumber}` : ""}`;
+                            return (
+                              <div
+                                key={t.id}
+                                className={`custom-dropdown-option ${isSelected ? "selected" : ""}`}
+                                onClick={() => {
+                                  setSelectedToolId(t.id);
+                                  setToolDropdownOpen(false);
+                                }}
+                                style={{
+                                  padding: "0.75rem 1rem",
+                                  cursor: "pointer",
+                                  borderBottom: "1px solid rgba(255,255,255,0.04)",
+                                  color: isSelected ? "var(--accent-color)" : "var(--text-primary)",
+                                  backgroundColor: isSelected ? "rgba(16, 185, 129, 0.08)" : "transparent",
+                                  transition: "background-color 0.2s",
+                                  fontSize: "0.85rem",
+                                  whiteSpace: "normal",
+                                  wordBreak: "break-word",
+                                  lineHeight: "1.4"
+                                }}
+                              >
+                                {displayText}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
 
-              <div className="form-group">
-                <label htmlFor="employeeSelect">Funcionário que está retirando</label>
-                <select 
-                  id="employeeSelect"
-                  className="form-control"
-                  value={selectedEmployeeId}
-                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                  required
-                >
-                  <option value="">-- Selecione o funcionário --</option>
-                  {employees.map(e => (
-                    <option key={e.id} value={e.id}>
-                      {e.name} ({e.role})
-                    </option>
-                  ))}
-                </select>
+              <div className="form-group" style={{ position: "relative" }}>
+                <label>Funcionário que está retirando</label>
+                <div className="custom-dropdown-container">
+                  <button
+                    type="button"
+                    className="form-control custom-dropdown-trigger"
+                    onClick={() => {
+                      setEmployeeDropdownOpen(!employeeDropdownOpen);
+                      setToolDropdownOpen(false);
+                    }}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      textAlign: "left",
+                      cursor: "pointer"
+                    }}
+                  >
+                    <span>
+                      {selectedEmployeeId
+                        ? employees.find(e => e.id === selectedEmployeeId)
+                          ? (() => {
+                              const emp = employees.find(e => e.id === selectedEmployeeId)!;
+                              return `${emp.name} (${emp.role})`;
+                            })()
+                          : "-- Selecione o funcionário --"
+                        : "-- Selecione o funcionário --"}
+                    </span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>▼</span>
+                  </button>
+                  
+                  {employeeDropdownOpen && (
+                    <>
+                      <div 
+                        style={{
+                          position: "fixed",
+                          top: 0,
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          zIndex: 999
+                        }}
+                        onClick={() => setEmployeeDropdownOpen(false)}
+                      />
+                      <div 
+                        className="custom-dropdown-options"
+                        style={{
+                          position: "absolute",
+                          top: "100%",
+                          left: 0,
+                          right: 0,
+                          backgroundColor: "var(--bg-tertiary)",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "8px",
+                          marginTop: "4px",
+                          maxHeight: "200px",
+                          overflowY: "auto",
+                          zIndex: 1000,
+                          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)"
+                        }}
+                      >
+                        <div
+                          className="custom-dropdown-option"
+                          onClick={() => {
+                            setSelectedEmployeeId("");
+                            setEmployeeDropdownOpen(false);
+                          }}
+                          style={{
+                            padding: "0.75rem 1rem",
+                            cursor: "pointer",
+                            color: "var(--text-muted)",
+                            borderBottom: "1px solid rgba(255,255,255,0.04)"
+                          }}
+                        >
+                          -- Selecione o funcionário --
+                        </div>
+                        
+                        {employees.length === 0 ? (
+                          <div style={{ padding: "0.75rem 1rem", color: "var(--text-muted)", fontSize: "0.85rem", fontStyle: "italic" }}>
+                            Nenhum funcionário cadastrado no sistema
+                          </div>
+                        ) : (
+                          employees.map(emp => {
+                            const isSelected = emp.id === selectedEmployeeId;
+                            return (
+                              <div
+                                key={emp.id}
+                                className={`custom-dropdown-option ${isSelected ? "selected" : ""}`}
+                                onClick={() => {
+                                  setSelectedEmployeeId(emp.id);
+                                  setEmployeeDropdownOpen(false);
+                                }}
+                                style={{
+                                  padding: "0.75rem 1rem",
+                                  cursor: "pointer",
+                                  borderBottom: "1px solid rgba(255,255,255,0.04)",
+                                  color: isSelected ? "var(--accent-color)" : "var(--text-primary)",
+                                  backgroundColor: isSelected ? "rgba(16, 185, 129, 0.08)" : "transparent",
+                                  transition: "background-color 0.2s",
+                                  fontSize: "0.85rem",
+                                  whiteSpace: "normal",
+                                  wordBreak: "break-word",
+                                  lineHeight: "1.4"
+                                }}
+                              >
+                                {emp.name} ({emp.role})
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="form-group" style={{ position: "relative" }}>
+                <label>Canteiro / Obra Destino</label>
+                <div className="custom-dropdown-container">
+                  <button
+                    type="button"
+                    className="form-control custom-dropdown-trigger"
+                    onClick={() => {
+                      setObraDropdownOpen(!obraDropdownOpen);
+                      setToolDropdownOpen(false);
+                      setEmployeeDropdownOpen(false);
+                    }}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      textAlign: "left",
+                      cursor: "pointer"
+                    }}
+                  >
+                    <span>{obraName}</span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>▼</span>
+                  </button>
+                  
+                  {obraDropdownOpen && (
+                    <>
+                      <div 
+                        style={{
+                          position: "fixed",
+                          top: 0,
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          zIndex: 999
+                        }}
+                        onClick={() => setObraDropdownOpen(false)}
+                      />
+                      <div 
+                        className="custom-dropdown-options"
+                        style={{
+                          position: "absolute",
+                          top: "100%",
+                          left: 0,
+                          right: 0,
+                          backgroundColor: "var(--bg-tertiary)",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "8px",
+                          marginTop: "4px",
+                          maxHeight: "200px",
+                          overflowY: "auto",
+                          zIndex: 1000,
+                          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)"
+                        }}
+                      >
+                        {obras.filter(o => o.status === "active").length === 0 ? (
+                          <div style={{ padding: "0.75rem 1rem", color: "var(--text-muted)", fontSize: "0.85rem", fontStyle: "italic" }}>
+                            Nenhuma obra ativa cadastrada. Cadastre na aba Obras!
+                          </div>
+                        ) : (
+                          obras.filter(o => o.status === "active").map(o => {
+                            const isSelected = o.name === obraName;
+                            return (
+                              <div
+                                key={o.id}
+                                className={`custom-dropdown-option ${isSelected ? "selected" : ""}`}
+                                onClick={() => {
+                                  setObraName(o.name);
+                                  setObraDropdownOpen(false);
+                                }}
+                                style={{
+                                  padding: "0.75rem 1rem",
+                                  cursor: "pointer",
+                                  borderBottom: "1px solid rgba(255,255,255,0.04)",
+                                  color: isSelected ? "var(--accent-color)" : "var(--text-primary)",
+                                  backgroundColor: isSelected ? "rgba(16, 185, 129, 0.08)" : "transparent",
+                                  transition: "background-color 0.2s",
+                                  fontSize: "0.85rem",
+                                  whiteSpace: "normal",
+                                  wordBreak: "break-word",
+                                  lineHeight: "1.4"
+                                }}
+                              >
+                                {o.name}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="form-group">
@@ -582,12 +1045,27 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* CSS Pulse animation for warnings */}
+      <CustomDialog
+        isOpen={dialogOpen}
+        title={dialogTitle}
+        message={dialogMessage}
+        type={dialogType}
+        confirmText={dialogConfirmText}
+        onConfirm={dialogOnConfirm}
+        onCancel={() => setDialogOpen(false)}
+      />
+
+      {/* CSS Pulse animation for warnings and network status */}
       <style jsx global>{`
         @keyframes pulse {
           0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
           70% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
           100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+        @keyframes pulseNetwork {
+          0% { opacity: 0.4; transform: scale(0.9); }
+          50% { opacity: 1; transform: scale(1.1); }
+          100% { opacity: 0.4; transform: scale(0.9); }
         }
       `}</style>
     </div>

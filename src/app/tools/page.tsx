@@ -19,11 +19,38 @@ import {
   AlertTriangle
 } from "lucide-react";
 import PhotoUpload from "@/components/PhotoUpload";
+import CustomDialog from "@/components/CustomDialog";
 
 export default function ToolsPage() {
   const router = useRouter();
   const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Custom Dialog State
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogTitle, setDialogTitle] = useState("");
+  const [dialogMessage, setDialogMessage] = useState("");
+  const [dialogType, setDialogType] = useState<"info" | "warning" | "danger" | "confirm">("info");
+  const [dialogConfirmText, setDialogConfirmText] = useState("OK");
+  const [dialogOnConfirm, setDialogOnConfirm] = useState<() => void>(() => {});
+
+  const triggerDialog = (
+    title: string,
+    message: string,
+    type: "info" | "warning" | "danger" | "confirm",
+    onConfirm: () => void,
+    confirmText = "OK"
+  ) => {
+    setDialogTitle(title);
+    setDialogMessage(message);
+    setDialogType(type);
+    setDialogConfirmText(confirmText);
+    setDialogOnConfirm(() => () => {
+      onConfirm();
+      setDialogOpen(false);
+    });
+    setDialogOpen(true);
+  };
 
   // Modal states
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -139,19 +166,31 @@ export default function ToolsPage() {
   const handleDeleteTool = async (id: string, toolName: string) => {
     const tool = tools.find(t => t.id === id);
     if (tool?.status === "loaned" || tool?.status === "pending") {
-      alert(`A ferramenta "${toolName}" está em trânsito com colaborador e não pode ser excluída até ser aprovada.`);
+      triggerDialog(
+        "Ferramenta em Canteiro",
+        `A ferramenta "${toolName}" está sob responsabilidade de um colaborador no canteiro de obras e não pode ser removida do inventário. Por favor, aprove a devolução antes de excluir.`,
+        "warning",
+        () => {}
+      );
       return;
     }
 
-    if (confirm(`Deseja realmente excluir a ferramenta "${toolName}" permanentemente?`)) {
-      try {
-        await deleteTool(id);
-        await fetchTools();
-      } catch (err) {
-        console.error(err);
-        alert("Erro ao excluir ferramenta.");
-      }
-    }
+    triggerDialog(
+      "Excluir Equipamento?",
+      `Deseja realmente remover permanentemente a ferramenta "${toolName}" do inventário LRO? Esta ação não pode ser desfeita.`,
+      "confirm",
+      async () => {
+        try {
+          await deleteTool(id);
+          await fetchTools();
+          triggerDialog("Excluído com Sucesso", "A ferramenta foi removida do cadastro de inventário.", "info", () => {});
+        } catch (err) {
+          console.error(err);
+          triggerDialog("Erro na Operação", "Não foi possível excluir a ferramenta do sistema.", "danger", () => {});
+        }
+      },
+      "Excluir"
+    );
   };
 
   const getStatusBadge = (s: Tool["status"]) => {
@@ -208,73 +247,124 @@ export default function ToolsPage() {
             Nenhuma ferramenta cadastrada no inventário. Clique em "Cadastrar Ferramenta" para começar.
           </p>
         ) : (
-          <div className="table-container">
-            <table className="lro-table">
-              <thead>
-                <tr>
-                  <th>Foto</th>
-                  <th>Ferramenta</th>
-                  <th>Marca</th>
-                  <th>Nº Série / Identificador</th>
-                  <th>Status</th>
-                  <th>Responsável Atual</th>
-                  <th style={{ textAlign: "right" }}>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
+          <>
+            {/* Desktop Table View */}
+            <div className="table-container desktop-only">
+              <table className="lro-table">
+                <thead>
+                  <tr>
+                    <th>Foto</th>
+                    <th>Ferramenta</th>
+                    <th>Marca</th>
+                    <th>Nº Série / Identificador</th>
+                    <th>Status</th>
+                    <th>Responsável Atual</th>
+                    <th style={{ textAlign: "right" }}>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tools.map((tool) => (
+                    <tr key={tool.id}>
+                      <td data-label="Foto">
+                        <div style={{
+                          width: "48px",
+                          height: "48px",
+                          borderRadius: "8px",
+                          overflow: "hidden",
+                          backgroundColor: "var(--bg-tertiary)",
+                          border: "1px solid var(--border-color)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center"
+                        }}>
+                          {tool.image ? (
+                            <img src={tool.image} alt={tool.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          ) : (
+                            <Wrench size={18} style={{ color: "var(--text-muted)" }} />
+                          )}
+                        </div>
+                      </td>
+                      <td data-label="Ferramenta" style={{ fontWeight: 600 }}>{tool.name}</td>
+                      <td data-label="Marca">{tool.brand || "—"}</td>
+                      <td data-label="Nº Série" style={{ fontFamily: "monospace" }}>{tool.serialNumber || "—"}</td>
+                      <td data-label="Status">{getStatusBadge(tool.status)}</td>
+                      <td data-label="Responsável" style={{ fontStyle: tool.currentEmployeeName ? "normal" : "italic", color: tool.currentEmployeeName ? "var(--text-primary)" : "var(--text-muted)" }}>
+                        {tool.currentEmployeeName || "Na Base"}
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        <div style={{ display: "inline-flex", gap: "0.5rem" }}>
+                          <button 
+                            className="btn btn-secondary" 
+                            onClick={() => handleOpenEdit(tool)}
+                            style={{ padding: "0.4rem", borderRadius: "6px" }}
+                            title="Editar"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button 
+                            className="btn btn-secondary btn-danger" 
+                            onClick={() => handleDeleteTool(tool.id, tool.name)}
+                            style={{ padding: "0.4rem", borderRadius: "6px" }}
+                            title="Excluir"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards Grid View */}
+            <div className="mobile-only">
+              <div className="mobile-cards-grid">
                 {tools.map((tool) => (
-                  <tr key={tool.id}>
-                    <td data-label="Foto">
-                      <div style={{
-                        width: "48px",
-                        height: "48px",
-                        borderRadius: "8px",
-                        overflow: "hidden",
-                        backgroundColor: "var(--bg-tertiary)",
-                        border: "1px solid var(--border-color)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center"
-                      }}>
+                  <div key={tool.id} className="tool-mobile-card">
+                    <div className="tool-card-header">
+                      <div className="tool-card-img-wrapper">
                         {tool.image ? (
-                          <img src={tool.image} alt={tool.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <img src={tool.image} alt={tool.name} />
                         ) : (
-                          <Wrench size={18} style={{ color: "var(--text-muted)" }} />
+                          <Wrench size={24} style={{ color: "var(--text-muted)" }} />
                         )}
                       </div>
-                    </td>
-                    <td data-label="Ferramenta" style={{ fontWeight: 600 }}>{tool.name}</td>
-                    <td data-label="Marca">{tool.brand || "—"}</td>
-                    <td data-label="Nº Série" style={{ fontFamily: "monospace" }}>{tool.serialNumber || "—"}</td>
-                    <td data-label="Status">{getStatusBadge(tool.status)}</td>
-                    <td data-label="Responsável" style={{ fontStyle: tool.currentEmployeeName ? "normal" : "italic", color: tool.currentEmployeeName ? "var(--text-primary)" : "var(--text-muted)" }}>
-                      {tool.currentEmployeeName || "Na Base"}
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      <div style={{ display: "inline-flex", gap: "0.5rem" }}>
-                        <button 
-                          className="btn btn-secondary" 
-                          onClick={() => handleOpenEdit(tool)}
-                          style={{ padding: "0.4rem", borderRadius: "6px" }}
-                          title="Editar"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button 
-                          className="btn btn-secondary btn-danger" 
-                          onClick={() => handleDeleteTool(tool.id, tool.name)}
-                          style={{ padding: "0.4rem", borderRadius: "6px" }}
-                          title="Excluir"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                      <div className="tool-card-title-block">
+                        <h3>{tool.name}</h3>
+                        <div className="tool-card-meta">
+                          <span className="meta-item"><strong>Marca:</strong> {tool.brand || "—"}</span>
+                          <span className="meta-item"><strong>Série:</strong> {tool.serialNumber || "—"}</span>
+                        </div>
                       </div>
-                    </td>
-                  </tr>
+                    </div>
+                    
+                    <div className="tool-card-body">
+                      <div className="tool-status-row">
+                        <span>Status:</span>
+                        {getStatusBadge(tool.status)}
+                      </div>
+                      <div className="tool-resp-row">
+                        <span>Responsável:</span>
+                        <span className="resp-name" style={{ fontStyle: tool.currentEmployeeName ? "normal" : "italic", color: tool.currentEmployeeName ? "var(--text-primary)" : "var(--text-muted)" }}>
+                          {tool.currentEmployeeName || "Na Base"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="tool-card-actions">
+                      <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEdit(tool)}>
+                        <Edit2 size={14} /> Editar
+                      </button>
+                      <button className="btn btn-secondary btn-danger btn-sm" onClick={() => handleDeleteTool(tool.id, tool.name)}>
+                        <Trash2 size={14} /> Excluir
+                      </button>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </div>
+          </>
         )}
       </section>
 
@@ -460,6 +550,16 @@ export default function ToolsPage() {
           </div>
         </div>
       )}
+
+      <CustomDialog
+        isOpen={dialogOpen}
+        title={dialogTitle}
+        message={dialogMessage}
+        type={dialogType}
+        confirmText={dialogConfirmText}
+        onConfirm={dialogOnConfirm}
+        onCancel={() => setDialogOpen(false)}
+      />
     </div>
   );
 }

@@ -30,4 +30,13 @@ export interface Loan {
   status: 'active' | 'pending' | 'returned'; // 'active' = out in the field, 'pending' = returned by colab waiting for approval, 'returned' = approved and base
   returnProofImage?: string | null; // Base64 photo uploaded by colab on return
   returnRequestDate?: string | null; // ISO string of when return request was made
+  obraName?: string | null; // Construction site where the tool is used
+  returnCondition?: 'perfect' | 'repair' | null; // Tool condition reported on return
+}
+
+export interface Obra {
+  id: string;
+  name: string;
+  address?: string | null;
+  status: 'active' | 'completed';
 }

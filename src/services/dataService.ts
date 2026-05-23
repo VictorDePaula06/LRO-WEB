@@ -1,5 +1,5 @@
 import { db, isFirebaseConfigured } from "./firebaseConfig";
-import { Tool, Employee, Loan } from "../types";
+import { Tool, Employee, Loan, Obra } from "../types";
 import { 
   collection, 
   getDocs, 
@@ -36,6 +36,14 @@ const defaultEmployees: Employee[] = [
   { id: "emp_4", name: "Marcos Oliveira", role: "Encarregado de Obra", phone: "(11) 95432-1098", pin: "4321", image: null }
 ];
 
+const defaultObras: Obra[] = [
+  { id: "obra_1", name: "Obra Shopping Bourbon", status: "active" },
+  { id: "obra_2", name: "Obra Prédio Centro", status: "active" },
+  { id: "obra_3", name: "Demolição Galpão Barra", status: "active" },
+  { id: "obra_4", name: "Demolição Residência Morumbi", status: "active" },
+  { id: "obra_5", name: "Base Central (LRO)", status: "active" }
+];
+
 // Helper to initialize LocalStorage if empty
 const initLocalStorage = () => {
   if (typeof window === "undefined") return;
@@ -45,6 +53,9 @@ const initLocalStorage = () => {
   }
   if (!localStorage.getItem("lro_employees")) {
     localStorage.setItem("lro_employees", JSON.stringify(defaultEmployees));
+  }
+  if (!localStorage.getItem("lro_obras")) {
+    localStorage.setItem("lro_obras", JSON.stringify(defaultObras));
   }
   if (!localStorage.getItem("lro_loans")) {
     localStorage.setItem("lro_loans", JSON.stringify([]));
@@ -139,7 +150,7 @@ const local = {
     localStorage.setItem("lro_loans", JSON.stringify(loans));
   },
   
-  createLoan: (toolId: string, employeeId: string, dueDate: string): Loan => {
+  createLoan: (toolId: string, employeeId: string, dueDate: string, obraName?: string | null): Loan => {
     const tools = local.getTools();
     const employees = local.getEmployees();
     const loans = local.getLoans();
@@ -153,13 +164,14 @@ const local = {
     const newLoan: Loan = {
       id: "loan_" + Date.now(),
       toolId: tool.id,
-      toolName: tool.name,
+      toolName: `${tool.name}${tool.brand ? ` (${tool.brand})` : ""}${tool.serialNumber && tool.serialNumber !== "N/A" ? ` - SN: ${tool.serialNumber}` : ""}`,
       employeeId: employee.id,
       employeeName: employee.name,
       loanDate: new Date().toISOString(),
       dueDate: getLocalEndOfDayISO(dueDate),
       returnDate: null,
-      status: "active"
+      status: "active",
+      obraName: obraName || "Base Central (LRO)"
     };
     
     loans.push(newLoan);
@@ -193,7 +205,7 @@ const local = {
     });
   },
   
-  requestReturnLoan: (loanId: string, proofImageBase64: string) => {
+  requestReturnLoan: (loanId: string, proofImageBase64: string, returnCondition: 'perfect' | 'repair') => {
     const loans = local.getLoans();
     const loan = loans.find(l => l.id === loanId);
     
@@ -203,7 +215,8 @@ const local = {
       ...l, 
       status: "pending" as const, 
       returnProofImage: proofImageBase64,
-      returnRequestDate: new Date().toISOString()
+      returnRequestDate: new Date().toISOString(),
+      returnCondition
     } : l);
     local.saveLoans(updatedLoans);
     
@@ -225,9 +238,11 @@ const local = {
     } : l);
     local.saveLoans(updatedLoans);
     
-    // Reset Tool Status to available
+    const toolStatus = loan.returnCondition === "repair" ? "maintenance" as const : "available" as const;
+    
+    // Reset Tool Status to available or maintenance
     local.updateTool(loan.toolId, { 
-      status: "available", 
+      status: toolStatus, 
       currentLoanId: null,
       currentEmployeeName: null 
     });
@@ -249,6 +264,38 @@ const local = {
     
     // Revert tool status to loaned
     local.updateTool(loan.toolId, { status: "loaned" });
+  },
+  
+  getObras: (): Obra[] => {
+    initLocalStorage();
+    return JSON.parse(localStorage.getItem("lro_obras") || "[]");
+  },
+  
+  saveObras: (obras: Obra[]) => {
+    localStorage.setItem("lro_obras", JSON.stringify(obras));
+  },
+  
+  addObra: (obraData: Omit<Obra, "id">): Obra => {
+    const obras = local.getObras();
+    const newObra: Obra = {
+      ...obraData,
+      id: "obra_" + Date.now()
+    };
+    obras.push(newObra);
+    local.saveObras(obras);
+    return newObra;
+  },
+  
+  updateObra: (id: string, updates: Partial<Obra>) => {
+    const obras = local.getObras();
+    const updated = obras.map(o => o.id === id ? { ...o, ...updates } : o);
+    local.saveObras(updated);
+  },
+  
+  deleteObra: (id: string) => {
+    const obras = local.getObras();
+    const filtered = obras.filter(o => o.id !== id);
+    local.saveObras(filtered);
   }
 };
 
@@ -324,7 +371,7 @@ const fb = {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Loan));
   },
   
-  createLoan: async (toolId: string, employeeId: string, dueDate: string): Promise<Loan> => {
+  createLoan: async (toolId: string, employeeId: string, dueDate: string, obraName?: string | null): Promise<Loan> => {
     if (!db) throw new Error("Firebase not initialized");
     
     const tools = await fb.getTools();
@@ -338,13 +385,14 @@ const fb = {
     
     const loanData: Omit<Loan, "id"> = {
       toolId: tool.id,
-      toolName: tool.name,
+      toolName: `${tool.name}${tool.brand ? ` (${tool.brand})` : ""}${tool.serialNumber && tool.serialNumber !== "N/A" ? ` - SN: ${tool.serialNumber}` : ""}`,
       employeeId: employee.id,
       employeeName: employee.name,
       loanDate: new Date().toISOString(),
       dueDate: getLocalEndOfDayISO(dueDate),
       returnDate: null,
-      status: "active"
+      status: "active",
+      obraName: obraName || "Base Central (LRO)"
     };
     
     const docRef = await addDoc(collection(db, "loans"), loanData);
@@ -380,7 +428,7 @@ const fb = {
     });
   },
 
-  requestReturnLoan: async (loanId: string, proofImageBase64: string) => {
+  requestReturnLoan: async (loanId: string, proofImageBase64: string, returnCondition: 'perfect' | 'repair') => {
     if (!db) throw new Error("Firebase not initialized");
     
     const loans = await fb.getLoans();
@@ -391,7 +439,8 @@ const fb = {
     await updateDoc(doc(db, "loans", loanId), {
       status: "pending" as const,
       returnProofImage: proofImageBase64,
-      returnRequestDate: new Date().toISOString()
+      returnRequestDate: new Date().toISOString(),
+      returnCondition
     });
     
     await fb.updateTool(loan.toolId, { status: "pending" });
@@ -411,8 +460,10 @@ const fb = {
       returnDate
     });
     
+    const toolStatus = loan.returnCondition === "repair" ? "maintenance" as const : "available" as const;
+    
     await fb.updateTool(loan.toolId, {
-      status: "available",
+      status: toolStatus,
       currentLoanId: null,
       currentEmployeeName: null
     });
@@ -433,6 +484,38 @@ const fb = {
     });
     
     await fb.updateTool(loan.toolId, { status: "loaned" });
+  },
+
+  getObras: async (): Promise<Obra[]> => {
+    if (!db) return [];
+    const snapshot = await getDocs(collection(db, "obras"));
+    const obras = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Obra));
+    
+    if (obras.length === 0) {
+      console.log("Seeding obras into Firestore...");
+      for (const o of defaultObras) {
+        const { id, ...data } = o;
+        await setDoc(doc(db, "obras", id), data);
+      }
+      return defaultObras;
+    }
+    return obras;
+  },
+  
+  addObra: async (obraData: Omit<Obra, "id">): Promise<Obra> => {
+    if (!db) throw new Error("Firebase not initialized");
+    const docRef = await addDoc(collection(db, "obras"), obraData);
+    return { id: docRef.id, ...obraData };
+  },
+  
+  updateObra: async (id: string, updates: Partial<Obra>) => {
+    if (!db) throw new Error("Firebase not initialized");
+    await updateDoc(doc(db, "obras", id), updates);
+  },
+  
+  deleteObra: async (id: string) => {
+    if (!db) throw new Error("Firebase not initialized");
+    await deleteDoc(doc(db, "obras", id));
   }
 };
 
@@ -473,16 +556,16 @@ export const getLoans = async (): Promise<Loan[]> => {
   return isFirebaseConfigured ? await fb.getLoans() : local.getLoans();
 };
 
-export const createLoan = async (toolId: string, employeeId: string, dueDate: string): Promise<Loan> => {
-  return isFirebaseConfigured ? await fb.createLoan(toolId, employeeId, dueDate) : local.createLoan(toolId, employeeId, dueDate);
+export const createLoan = async (toolId: string, employeeId: string, dueDate: string, obraName?: string | null): Promise<Loan> => {
+  return isFirebaseConfigured ? await fb.createLoan(toolId, employeeId, dueDate, obraName) : local.createLoan(toolId, employeeId, dueDate, obraName);
 };
 
 export const returnLoan = async (loanId: string): Promise<void> => {
   isFirebaseConfigured ? await fb.returnLoan(loanId) : local.returnLoan(loanId);
 };
 
-export const requestReturnLoan = async (loanId: string, proofImageBase64: string): Promise<void> => {
-  isFirebaseConfigured ? await fb.requestReturnLoan(loanId, proofImageBase64) : local.requestReturnLoan(loanId, proofImageBase64);
+export const requestReturnLoan = async (loanId: string, proofImageBase64: string, returnCondition: 'perfect' | 'repair'): Promise<void> => {
+  isFirebaseConfigured ? await fb.requestReturnLoan(loanId, proofImageBase64, returnCondition) : local.requestReturnLoan(loanId, proofImageBase64, returnCondition);
 };
 
 export const approveReturn = async (loanId: string): Promise<void> => {
@@ -491,4 +574,20 @@ export const approveReturn = async (loanId: string): Promise<void> => {
 
 export const rejectReturn = async (loanId: string): Promise<void> => {
   isFirebaseConfigured ? await fb.rejectReturn(loanId) : local.rejectReturn(loanId);
+};
+
+export const getObras = async (): Promise<Obra[]> => {
+  return isFirebaseConfigured ? await fb.getObras() : local.getObras();
+};
+
+export const addObra = async (obraData: Omit<Obra, "id">): Promise<Obra> => {
+  return isFirebaseConfigured ? await fb.addObra(obraData) : local.addObra(obraData);
+};
+
+export const updateObra = async (id: string, updates: Partial<Obra>): Promise<void> => {
+  isFirebaseConfigured ? await fb.updateObra(id, updates) : local.updateObra(id, updates);
+};
+
+export const deleteObra = async (id: string): Promise<void> => {
+  isFirebaseConfigured ? await fb.deleteObra(id) : local.deleteObra(id);
 };

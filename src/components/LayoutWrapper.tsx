@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
+import MobileNavBar from "./MobileNavBar";
 
 interface LayoutWrapperProps {
   children: React.ReactNode;
@@ -38,6 +39,7 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
       <main className="main-content">
         {children}
       </main>
+      <MobileNavBar />
     </div>
   );
 }

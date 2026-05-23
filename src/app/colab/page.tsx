@@ -31,6 +31,7 @@ export default function CollaboratorPortal() {
   // Modal Return State
   const [activeReturnLoan, setActiveReturnLoan] = useState<Loan | null>(null);
   const [proofImage, setProofImage] = useState<string | null>(null);
+  const [returnCondition, setReturnCondition] = useState<'perfect' | 'repair'>('perfect');
   const [errorMsg, setErrorMsg] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -76,6 +77,7 @@ export default function CollaboratorPortal() {
   const handleOpenReturnModal = (loan: Loan) => {
     setActiveReturnLoan(loan);
     setProofImage(null);
+    setReturnCondition('perfect');
     setErrorMsg("");
   };
 
@@ -90,7 +92,7 @@ export default function CollaboratorPortal() {
     try {
       setIsSubmitting(true);
       setErrorMsg("");
-      await requestReturnLoan(activeReturnLoan.id, proofImage);
+      await requestReturnLoan(activeReturnLoan.id, proofImage, returnCondition);
       
       // Close & Refresh
       setActiveReturnLoan(null);
@@ -348,7 +350,68 @@ export default function CollaboratorPortal() {
                 value={proofImage}
               />
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1.5rem" }}>
+              <div className="form-group" style={{ marginTop: "1.25rem" }}>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                  Estado de Entrega do Equipamento
+                </label>
+                <div style={{ display: "flex", gap: "0.75rem" }}>
+                  <label 
+                    style={{ 
+                      flex: 1, 
+                      display: "flex", 
+                      alignItems: "center", 
+                      justifyContent: "center",
+                      gap: "0.5rem", 
+                      padding: "0.65rem 0.5rem", 
+                      borderRadius: "8px", 
+                      border: returnCondition === 'perfect' ? "2px solid var(--accent-color)" : "1px solid var(--border-color)",
+                      backgroundColor: returnCondition === 'perfect' ? "rgba(16, 185, 129, 0.06)" : "var(--bg-tertiary)",
+                      cursor: "pointer",
+                      fontWeight: 700,
+                      fontSize: "0.8rem",
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    <input 
+                      type="radio" 
+                      name="returnCondition" 
+                      checked={returnCondition === 'perfect'}
+                      onChange={() => setReturnCondition('perfect')}
+                      style={{ accentColor: "var(--accent-color)" }}
+                    />
+                    <span>🟢 Funcionando</span>
+                  </label>
+                  
+                  <label 
+                    style={{ 
+                      flex: 1, 
+                      display: "flex", 
+                      alignItems: "center", 
+                      justifyContent: "center",
+                      gap: "0.5rem", 
+                      padding: "0.65rem 0.5rem", 
+                      borderRadius: "8px", 
+                      border: returnCondition === 'repair' ? "2px solid var(--danger-color)" : "1px solid var(--border-color)",
+                      backgroundColor: returnCondition === 'repair' ? "rgba(239, 68, 68, 0.06)" : "var(--bg-tertiary)",
+                      cursor: "pointer",
+                      fontWeight: 700,
+                      fontSize: "0.8rem",
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    <input 
+                      type="radio" 
+                      name="returnCondition" 
+                      checked={returnCondition === 'repair'}
+                      onChange={() => setReturnCondition('repair')}
+                      style={{ accentColor: "var(--danger-color)" }}
+                    />
+                    <span>🔴 Precisa Conserto</span>
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1.75rem" }}>
                 <button 
                   type="button" 
                   className="btn btn-secondary" 

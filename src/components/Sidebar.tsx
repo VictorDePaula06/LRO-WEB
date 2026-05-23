@@ -1,11 +1,21 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutDashboard, Wrench, Users } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { LayoutDashboard, Wrench, Users, Briefcase, LogOut } from "lucide-react";
+import CustomDialog from "./CustomDialog";
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const handleLogoutConfirm = () => {
+    localStorage.clear();
+    setDialogOpen(false);
+    router.push("/login");
+  };
 
   return (
     <aside className="sidebar">
@@ -45,12 +55,56 @@ export default function Sidebar() {
             <span>Funcionários</span>
           </Link>
         </li>
+        <li>
+          <Link 
+            href="/obras" 
+            className={`nav-link ${pathname.startsWith("/obras") ? "active" : ""}`}
+          >
+            <Briefcase size={20} />
+            <span>Obras / Canteiros</span>
+          </Link>
+        </li>
       </nav>
 
-      <div className="sidebar-footer">
-        <p>LRO Sistema v1.0</p>
-        <p>© 2026 LRO Demolições</p>
+      <div className="sidebar-footer" style={{ display: "flex", flexDirection: "column", gap: "1rem", width: "100%", marginTop: "auto" }}>
+        <button 
+          onClick={() => setDialogOpen(true)}
+          className="nav-link nav-link-logout"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "1rem",
+            padding: "0.85rem 1rem",
+            borderRadius: "8px",
+            color: "var(--danger-color)",
+            backgroundColor: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.2)",
+            fontWeight: "600",
+            cursor: "pointer",
+            width: "100%",
+            textAlign: "left",
+            transition: "all 0.2s ease",
+            fontFamily: "inherit"
+          }}
+        >
+          <LogOut size={20} />
+          <span>Sair da Conta</span>
+        </button>
+        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", textAlign: "center" }}>
+          <p>LRO Sistema v1.0</p>
+          <p>© 2026 LRO Demolições</p>
+        </div>
       </div>
+
+      <CustomDialog
+        isOpen={dialogOpen}
+        title="Sair da Conta"
+        message="Deseja realmente encerrar a sua sessão administrativa no LRO?"
+        type="confirm"
+        confirmText="Sair"
+        onConfirm={handleLogoutConfirm}
+        onCancel={() => setDialogOpen(false)}
+      />
     </aside>
   );
 }

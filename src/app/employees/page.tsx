@@ -21,12 +21,39 @@ import {
   Key
 } from "lucide-react";
 import PhotoUpload from "@/components/PhotoUpload";
+import CustomDialog from "@/components/CustomDialog";
 
 export default function EmployeesPage() {
   const router = useRouter();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Custom Dialog State
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogTitle, setDialogTitle] = useState("");
+  const [dialogMessage, setDialogMessage] = useState("");
+  const [dialogType, setDialogType] = useState<"info" | "warning" | "danger" | "confirm">("info");
+  const [dialogConfirmText, setDialogConfirmText] = useState("OK");
+  const [dialogOnConfirm, setDialogOnConfirm] = useState<() => void>(() => {});
+
+  const triggerDialog = (
+    title: string,
+    message: string,
+    type: "info" | "warning" | "danger" | "confirm",
+    onConfirm: () => void,
+    confirmText = "OK"
+  ) => {
+    setDialogTitle(title);
+    setDialogMessage(message);
+    setDialogType(type);
+    setDialogConfirmText(confirmText);
+    setDialogOnConfirm(() => () => {
+      onConfirm();
+      setDialogOpen(false);
+    });
+    setDialogOpen(true);
+  };
 
   // Modal states
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -157,19 +184,31 @@ export default function EmployeesPage() {
     // Check if employee has any active loans (checked-out tools)
     const activeLoans = loans.filter(l => l.employeeId === id && l.status !== "returned");
     if (activeLoans.length > 0) {
-      alert(`O funcionário "${empName}" possui ${activeLoans.length} ferramenta(s) sob sua responsabilidade (em posse ou aguardando aprovação). Devolva e aprove tudo antes de excluí-lo do sistema.`);
+      triggerDialog(
+        "Funcionário com Carga",
+        `O funcionário "${empName}" possui ${activeLoans.length} ferramenta(s) sob sua responsabilidade (em posse ou aguardando aprovação). Por favor, realize a devolução e aprove tudo antes de excluí-lo do sistema.`,
+        "warning",
+        () => {}
+      );
       return;
     }
 
-    if (confirm(`Deseja realmente excluir o funcionário "${empName}" permanentemente?`)) {
-      try {
-        await deleteEmployee(id);
-        await fetchData();
-      } catch (err) {
-        console.error(err);
-        alert("Erro ao excluir funcionário.");
-      }
-    }
+    triggerDialog(
+      "Excluir Funcionário?",
+      `Deseja realmente remover permanentemente o funcionário "${empName}" da equipe LRO? Esta ação não pode ser desfeita.`,
+      "confirm",
+      async () => {
+        try {
+          await deleteEmployee(id);
+          await fetchData();
+          triggerDialog("Excluído com Sucesso", "O funcionário foi removido do cadastro da equipe.", "info", () => {});
+        } catch (err) {
+          console.error(err);
+          triggerDialog("Erro na Operação", "Não foi possível excluir o funcionário do sistema.", "danger", () => {});
+        }
+      },
+      "Excluir"
+    );
   };
 
   // Helper to count active tools for an employee
@@ -216,98 +255,164 @@ export default function EmployeesPage() {
             Nenhum funcionário cadastrado. Clique em "Cadastrar Funcionário" para começar.
           </p>
         ) : (
-          <div className="table-container">
-            <table className="lro-table">
-              <thead>
-                <tr>
-                  <th>Perfil</th>
-                  <th>Nome</th>
-                  <th>Cargo / Função</th>
-                  <th>Telefone de Contato</th>
-                  <th>Código PIN (Acesso)</th>
-                  <th>Ferramentas com Ele</th>
-                  <th style={{ textAlign: "right" }}>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
+          <>
+            {/* Desktop Table View */}
+            <div className="table-container desktop-only">
+              <table className="lro-table">
+                <thead>
+                  <tr>
+                    <th>Perfil</th>
+                    <th>Nome</th>
+                    <th>Cargo / Função</th>
+                    <th>Telefone de Contato</th>
+                    <th>Código PIN (Acesso)</th>
+                    <th>Ferramentas com Ele</th>
+                    <th style={{ textAlign: "right" }}>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.map((emp) => {
+                    const toolsCount = getActiveToolsCount(emp.id);
+                    return (
+                      <tr key={emp.id}>
+                        <td data-label="Perfil">
+                          <div style={{
+                            width: "44px",
+                            height: "44px",
+                            borderRadius: "50%",
+                            overflow: "hidden",
+                            backgroundColor: "var(--bg-tertiary)",
+                            border: "1px solid var(--border-color)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center"
+                          }}>
+                            {emp.image ? (
+                              <img src={emp.image} alt={emp.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            ) : (
+                              <User size={18} style={{ color: "var(--text-muted)" }} />
+                            )}
+                          </div>
+                        </td>
+                        <td data-label="Nome" style={{ fontWeight: 600 }}>{emp.name}</td>
+                        <td data-label="Cargo">{emp.role}</td>
+                        <td data-label="Contato">
+                          {emp.phone && emp.phone !== "Sem Telefone" ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <Phone size={13} style={{ color: "var(--text-muted)" }} />
+                              <span>{emp.phone}</span>
+                            </div>
+                          ) : (
+                            <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Sem telefone</span>
+                          )}
+                        </td>
+                        <td data-label="PIN">
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                            <Key size={13} style={{ color: "var(--accent-color)" }} />
+                            <span style={{ fontFamily: "monospace", letterSpacing: "1px", fontWeight: 700 }}>
+                              {emp.pin}
+                            </span>
+                          </div>
+                        </td>
+                        <td data-label="Ferramentas">
+                          {toolsCount > 0 ? (
+                            <span className="badge badge-warning" style={{ fontWeight: 700 }}>
+                              {toolsCount} {toolsCount === 1 ? "ferramenta" : "ferramentas"}
+                            </span>
+                          ) : (
+                            <span className="badge badge-success" style={{ opacity: 0.6 }}>Nenhuma</span>
+                          )}
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <div style={{ display: "inline-flex", gap: "0.5rem" }}>
+                            <button 
+                              className="btn btn-secondary" 
+                              onClick={() => handleOpenEdit(emp)}
+                              style={{ padding: "0.4rem", borderRadius: "6px" }}
+                              title="Editar"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button 
+                              className="btn btn-secondary btn-danger" 
+                              onClick={() => handleDeleteEmployee(emp.id, emp.name)}
+                              style={{ padding: "0.4rem", borderRadius: "6px" }}
+                              title="Excluir"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards Grid View */}
+            <div className="mobile-only">
+              <div className="mobile-cards-grid">
                 {employees.map((emp) => {
                   const toolsCount = getActiveToolsCount(emp.id);
                   return (
-                    <tr key={emp.id}>
-                      <td data-label="Perfil">
-                        <div style={{
-                          width: "44px",
-                          height: "44px",
-                          borderRadius: "50%",
-                          overflow: "hidden",
-                          backgroundColor: "var(--bg-tertiary)",
-                          border: "1px solid var(--border-color)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center"
-                        }}>
+                    <div key={emp.id} className="employee-mobile-card">
+                      <div className="emp-card-header">
+                        <div className="emp-card-avatar-wrapper">
                           {emp.image ? (
-                            <img src={emp.image} alt={emp.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <img src={emp.image} alt={emp.name} />
                           ) : (
-                            <User size={18} style={{ color: "var(--text-muted)" }} />
+                            <User size={24} style={{ color: "var(--text-muted)" }} />
                           )}
                         </div>
-                      </td>
-                      <td data-label="Nome" style={{ fontWeight: 600 }}>{emp.name}</td>
-                      <td data-label="Cargo">{emp.role}</td>
-                      <td data-label="Contato">
-                        {emp.phone && emp.phone !== "Sem Telefone" ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                            <Phone size={13} style={{ color: "var(--text-muted)" }} />
-                            <span>{emp.phone}</span>
-                          </div>
-                        ) : (
-                          <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Sem telefone</span>
-                        )}
-                      </td>
-                      <td data-label="PIN">
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                          <Key size={13} style={{ color: "var(--accent-color)" }} />
-                          <span style={{ fontFamily: "monospace", letterSpacing: "1px", fontWeight: 700 }}>
-                            {emp.pin}
-                          </span>
+                        <div className="emp-card-title-block">
+                          <h3>{emp.name}</h3>
+                          <span className="emp-card-role">{emp.role}</span>
                         </div>
-                      </td>
-                      <td data-label="Ferramentas">
-                        {toolsCount > 0 ? (
-                          <span className="badge badge-warning" style={{ fontWeight: 700 }}>
-                            {toolsCount} {toolsCount === 1 ? "ferramenta" : "ferramentas"}
-                          </span>
-                        ) : (
-                          <span className="badge badge-success" style={{ opacity: 0.6 }}>Nenhuma</span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        <div style={{ display: "inline-flex", gap: "0.5rem" }}>
-                          <button 
-                            className="btn btn-secondary" 
-                            onClick={() => handleOpenEdit(emp)}
-                            style={{ padding: "0.4rem", borderRadius: "6px" }}
-                            title="Editar"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          <button 
-                            className="btn btn-secondary btn-danger" 
-                            onClick={() => handleDeleteEmployee(emp.id, emp.name)}
-                            style={{ padding: "0.4rem", borderRadius: "6px" }}
-                            title="Excluir"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                      </div>
+
+                      <div className="emp-card-body">
+                        <div className="emp-info-row">
+                          <span>WhatsApp:</span>
+                          {emp.phone && emp.phone !== "Sem Telefone" ? (
+                            <span style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontWeight: "600" }}>
+                              <Phone size={12} />
+                              {emp.phone}
+                            </span>
+                          ) : (
+                            <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Sem telefone</span>
+                          )}
                         </div>
-                      </td>
-                    </tr>
+                        <div className="emp-info-row">
+                          <span>Código PIN:</span>
+                          <span className="pin-highlight">{emp.pin}</span>
+                        </div>
+                        <div className="emp-info-row">
+                          <span>Responsabilidade:</span>
+                          {toolsCount > 0 ? (
+                            <span className="badge badge-warning" style={{ fontWeight: 700 }}>
+                              {toolsCount} {toolsCount === 1 ? "ferramenta" : "ferramentas"}
+                            </span>
+                          ) : (
+                            <span className="badge badge-success" style={{ opacity: 0.8 }}>Nenhuma</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="emp-card-actions">
+                        <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEdit(emp)}>
+                          <Edit2 size={14} /> Editar
+                        </button>
+                        <button className="btn btn-secondary btn-danger btn-sm" onClick={() => handleDeleteEmployee(emp.id, emp.name)}>
+                          <Trash2 size={14} /> Excluir
+                        </button>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </div>
+          </>
         )}
       </section>
 
@@ -496,6 +601,16 @@ export default function EmployeesPage() {
           </div>
         </div>
       )}
+
+      <CustomDialog
+        isOpen={dialogOpen}
+        title={dialogTitle}
+        message={dialogMessage}
+        type={dialogType}
+        confirmText={dialogConfirmText}
+        onConfirm={dialogOnConfirm}
+        onCancel={() => setDialogOpen(false)}
+      />
     </div>
   );
 }
